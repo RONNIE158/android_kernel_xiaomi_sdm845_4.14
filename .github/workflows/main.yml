@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Checkout Kernel 4.14
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: RONNIE158/android_kernel_xiaomi_sdm845_4.14
         ref: rebase
@@ -41,14 +41,16 @@ jobs:
 
     - name: Clone LineageOS Clang Toolchain
       run: |
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b /toolchain/clang-r450784d
+        mkdir -p toolchain
+        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d toolchain/clang-r450784d
+        echo "$GITHUB_WORKSPACE/toolchain/clang-r450784d/bin" >> $GITHUB_PATH
 
     - name: Install build dependencies
       run: sudo apt-get install -y bc bison build-essential cpio flex libssl-dev libncurses5-dev libelf-dev python3
 
     - name: Build Kernel
       run: |
-        export PATH=/toolchain/clang-r450784d/bin:$PATH
+        export PATH=$GITHUB_WORKSPACE/toolchain/clang-r450784d/bin:$PATH
         make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 $DEFCONFIG
         make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 -j$(nproc)
 
