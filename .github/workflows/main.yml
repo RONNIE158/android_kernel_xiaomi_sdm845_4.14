@@ -1,3 +1,4 @@
+
 name: Upstream 4.9 to 4.14 and Build
 
 on:
@@ -39,11 +40,15 @@ jobs:
         cp -r kernel-4.9/arch/arm64/boot/dts/qcom/* $KERNEL_DIR/arch/arm64/boot/dts/qcom/
         cp -r kernel-4.9/drivers/soc/qcom/* $KERNEL_DIR/drivers/soc/qcom/
 
-    - name: Clone LineageOS Clang Toolchain
+    - name: Clone Toolchains
       run: |
         mkdir -p toolchain
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d toolchain/clang-r450784d
-        echo "$GITHUB_WORKSPACE/toolchain/clang-r450784d/bin" >> $GITHUB_PATH
+        git clone --depth=1 -b lineage-20.0 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b toolchain/clang
+        git clone --depth=1 -b test https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 toolchain/aarch64
+        git clone --depth=1 -b lineage-19.1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 toolchain/arm
+        echo "$GITHUB_WORKSPACE/toolchain/clang/bin" >> $GITHUB_PATH
+        echo "$GITHUB_WORKSPACE/toolchain/aarch64/bin" >> $GITHUB_PATH
+        echo "$GITHUB_WORKSPACE/toolchain/arm/bin" >> $GITHUB_PATH
 
     - name: Install Build Dependencies
       run: |
@@ -52,9 +57,13 @@ jobs:
 
     - name: Build Kernel
       run: |
-        export PATH=$GITHUB_WORKSPACE/toolchain/clang-r450784d/bin:$PATH
-        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 $DEFCONFIG
-        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 -j$(nproc)
+        export CLANG_PATH=$GITHUB_WORKSPACE/toolchain/clang/bin
+        export GCC_AARCH64=$GITHUB_WORKSPACE/toolchain/aarch64/bin/aarch64-linux-android-
+        export GCC_ARM32=$GITHUB_WORKSPACE/toolchain/arm/bin/arm-linux-androideabi-
+        export PATH=$CLANG_PATH:$PATH
+
+        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=$GCC_AARCH64 CROSS_COMPILE_ARM32=$GCC_ARM32 CLANG_TRIPLE=aarch64-linux-gnu- CC=clang $DEFCONFIG
+        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=$GCC_AARCH64 CROSS_COMPILE_ARM32=$GCC_ARM32 CLANG_TRIPLE=aarch64-linux-gnu- CC=clang -j$(nproc)
 
     - name: Generate Image.gz-dtb
       run: |
