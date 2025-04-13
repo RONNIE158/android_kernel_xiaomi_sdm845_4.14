@@ -1,0 +1,55 @@
+name: Build Kernel for Beryllium (Image.gz-dtb)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Kernel
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Upstream Kernel (This Repo)
+      uses: actions/checkout@v3
+
+    - name: Clone Source Kernel 4.9 for DTSI, Drivers, Defconfig
+      run: |
+        git clone https://github.com/RONNIE158/android_kernel_xiaomi_sdm845 -b lineage-21 source_4.9
+
+    - name: Download Toolchains (Clang + GCC)
+      run: |
+        mkdir -p toolchain && cd toolchain
+
+        git clone --depth=1 -b lineage-20.0 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b clang
+        git clone --depth=1 -b lineage-19.1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 aarch64
+        git clone --depth=1 -b lineage-19.1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 arm
+
+    - name: Add Toolchain to PATH
+      run: |
+        echo "$GITHUB_WORKSPACE/toolchain/clang/bin" >> $GITHUB_PATH
+        echo "$GITHUB_WORKSPACE/toolchain/aarch64/bin" >> $GITHUB_PATH
+        echo "$GITHUB_WORKSPACE/toolchain/arm/bin" >> $GITHUB_PATH
+
+    - name: Copy DTSI, Defconfig, Drivers from 4.9 Source
+      run: |
+        cp -rf source_4.9/arch/arm64/boot/dts/qcom/* arch/arm64/boot/dts/qcom/
+        cp -f source_4.9/arch/arm64/configs/beryllium_defconfig arch/arm64/configs/
+        cp -rf source_4.9/drivers/* drivers/ || true
+
+    - name: Build Image.gz-dtb
+      run: |
+        mkdir -p out
+        make O=out ARCH=arm64 beryllium_defconfig
+
+        make -j$(nproc) O=out \
+          ARCH=arm64 \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          CC=clang
+
+    - name: Upload Kernel Output
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-image
+        path: out/arch/arm64/boot/Image.gz-dtb
