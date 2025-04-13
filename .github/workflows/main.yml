@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Checkout Kernel 4.14
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
       with:
         repository: RONNIE158/android_kernel_xiaomi_sdm845_4.14
         ref: rebase
@@ -27,13 +27,13 @@ jobs:
     - name: Clone Kernel 4.9 Source
       run: git clone --depth=1 $KERNEL_4_9_REPO kernel-4.9
 
-    - name: Prepare target directories
+    - name: Prepare Target Directories
       run: |
         mkdir -p $KERNEL_DIR/arch/arm64/configs
         mkdir -p $KERNEL_DIR/arch/arm64/boot/dts/qcom
         mkdir -p $KERNEL_DIR/drivers/soc/qcom
 
-    - name: Import defconfig, DTSI, and drivers from 4.9
+    - name: Import defconfig, DTSI, and QCOM SoC Drivers from 4.9
       run: |
         cp kernel-4.9/arch/arm64/configs/$DEFCONFIG $KERNEL_DIR/arch/arm64/configs/
         cp -r kernel-4.9/arch/arm64/boot/dts/qcom/* $KERNEL_DIR/arch/arm64/boot/dts/qcom/
@@ -45,8 +45,10 @@ jobs:
         git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d toolchain/clang-r450784d
         echo "$GITHUB_WORKSPACE/toolchain/clang-r450784d/bin" >> $GITHUB_PATH
 
-    - name: Install build dependencies
-      run: sudo apt-get install -y bc bison build-essential cpio flex libssl-dev libncurses5-dev libelf-dev python3
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison build-essential cpio flex libssl-dev libncurses5-dev libelf-dev python3
 
     - name: Build Kernel
       run: |
