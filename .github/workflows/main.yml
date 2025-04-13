@@ -33,10 +33,10 @@ jobs:
         mkdir -p $KERNEL_DIR/arch/arm64/boot/dts/qcom
         mkdir -p $KERNEL_DIR/drivers/soc/qcom
 
-    - name: Import defconfig, DTSI, and QCOM SoC Drivers from 4.9
+    - name: Import defconfig, DTSI (beryllium only), and QCOM SoC Drivers from 4.9
       run: |
         cp kernel-4.9/arch/arm64/configs/$DEFCONFIG $KERNEL_DIR/arch/arm64/configs/
-        cp -r kernel-4.9/arch/arm64/boot/dts/qcom/* $KERNEL_DIR/arch/arm64/boot/dts/qcom/
+        find kernel-4.9/arch/arm64/boot/dts/qcom/ -type f -iname '*beryllium*.dts' -o -iname '*beryllium*.dtsi' -exec cp {} $KERNEL_DIR/arch/arm64/boot/dts/qcom/ \;
         cp -r kernel-4.9/drivers/soc/qcom/* $KERNEL_DIR/drivers/soc/qcom/
 
     - name: Clone Toolchains
@@ -58,12 +58,23 @@ jobs:
         export GCC_ARM32=$GITHUB_WORKSPACE/toolchain/arm/bin/arm-linux-androideabi-
         export PATH=$CLANG_PATH:$PATH
 
-        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=$GCC_AARCH64 CROSS_COMPILE_ARM32=$GCC_ARM32 CLANG_TRIPLE=aarch64-linux-gnu- CC=clang $DEFCONFIG
-        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=$GCC_AARCH64 CROSS_COMPILE_ARM32=$GCC_ARM32 CLANG_TRIPLE=aarch64-linux-gnu- CC=clang -j$(nproc)
+        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 \
+          CROSS_COMPILE=$GCC_AARCH64 CROSS_COMPILE_ARM32=$GCC_ARM32 \
+          CLANG_TRIPLE=aarch64-linux-gnu- CC=clang $DEFCONFIG
+
+        make -C $KERNEL_DIR O=$KERNEL_DIR/$OUT_DIR ARCH=arm64 SUBARCH=arm64 \
+          CROSS_COMPILE=$GCC_AARCH64 CROSS_COMPILE_ARM32=$GCC_ARM32 \
+          CLANG_TRIPLE=aarch64-linux-gnu- CC=clang -j$(nproc)
 
     - name: Generate Image.gz-dtb
       run: |
-        cat $KERNEL_DIR/$OUT_DIR/arch/arm64/boot/Image.gz $KERNEL_DIR/$OUT_DIR/arch/arm64/boot/dts/qcom/dipper.dtb > $KERNEL_DIR/$OUT_DIR/Image.gz-dtb
+        # Cari DTB hasil build yang mengandung beryllium
+        DTB_PATH=$(find $KERNEL_DIR/$OUT_DIR/arch/arm64/boot/dts/qcom/ -name '*beryllium*.dtb' | head -n 1)
+        if [ -z "$DTB_PATH" ]; then
+          echo "DTB untuk beryllium tidak ditemukan!"
+          exit 1
+        fi
+        cat $KERNEL_DIR/$OUT_DIR/arch/arm64/boot/Image.gz $DTB_PATH > $KERNEL_DIR/$OUT_DIR/Image.gz-dtb
 
     - name: Upload Kernel Image.gz-dtb
       uses: actions/upload-artifact@v4
