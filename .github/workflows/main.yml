@@ -1,0 +1,136 @@
+name: Build Non-GKI Kernel 4.14 from 4.9 and Push Changes
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      DEFCONFIG: vendor/beryllium_defconfig
+      TOOLCHAIN_DIR: /toolchain/clang-r450784d
+      KERNEL_4_9_REPO: https://github.com/RONNIE158/android_kernel_xiaomi_sdm845
+      KERNEL_4_14_REPO: https://github.com/RONNIE158/android_kernel_xiaomi_sdm845_4.14
+      KERNEL_DIR: $GITHUB_WORKSPACE/android_kernel_xiaomi_sdm845_4.14
+      OUT_DIR: out
+      COMMIT_MSG: "Upstream 4.9 changes to 4.14 and build kernel"
+
+    steps:
+      # Step 1: Checkout Kernel 4.14 Repository
+      - name: Checkout Kernel 4.14 Source
+        uses: actions/checkout@v4
+        with:
+          path: kernel-4.14
+          fetch-depth: 0
+
+      # Step 2: Clone Kernel 4.9 Repository to Import Files
+      - name: Clone Kernel 4.9 Repository
+        run: |
+          git clone --depth=1 $KERNEL_4_9_REPO kernel-4.9
+
+      # Step 3: Copy DTS and DTSI Files from Kernel 4.9 to Kernel 4.14
+      - name: Prepare DTS and DTSI Files from Kernel 4.9
+        run: |
+          mkdir -p $KERNEL_DIR/arch/arm64/boot/dts/qcom
+          cp -r kernel-4.9/arch/arm64/boot/dts/qcom/* $KERNEL_DIR/arch/arm64/boot/dts/qcom/
+
+      # Step 4: Copy Defconfig from Kernel 4.9 to Kernel 4.14
+      - name: Prepare Kernel 4.9 Defconfig
+        run: |
+          cp kernel-4.9/arch/arm64/configs/$DEFCONFIG $KERNEL_DIR/arch/arm64/configs/
+
+      # Step 5: Copy Driver Files from Kernel 4.9 to Kernel 4.14
+      - name: Prepare Driver Files from Kernel 4.9
+        run: |
+          mkdir -p $KERNEL_DIR/drivers/soc/qcom
+          cp -r kernel-4.9/drivers/soc/qcom/* $KERNEL_DIR/drivers/soc/qcom/
+
+      # Step 6: Clone and Setup LineageOS Toolchain (Clang)
+      - name: Clone LineageOS Toolchain (Clang)
+        run: |
+          mkdir -p clang && cd clang
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r450784d clang-r450784d
+          echo "TOOLCHAIN_DIR=$(pwd)/clang/clang-r450784d" >> $GITHUB_ENV
+
+      # Step 7: Install Build Dependencies
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison flex libssl-dev libelf-dev python3-distutils
+
+      # Step 8: Update and Prepare Defconfig with Required Options
+      - name: Update and Prepare Defconfig
+        run: |
+          export PATH=$TOOLCHAIN_DIR/bin:$PATH
+          make O=$OUT_DIR ARCH=$ARCH $DEFCONFIG
+          
+          # Enable necessary features in defconfig (CGroup v2, namespaces, etc.)
+          scripts/config --file $OUT_DIR/.config \
+            --enable CONFIG_CGROUPS \
+            --enable CONFIG_CGROUP_UNIFIED \
+            --enable CONFIG_CGROUP_CPUACCT \
+            --enable CONFIG_CGROUP_DEVICE \
+            --enable CONFIG_CGROUP_FREEZER \
+            --enable CONFIG_CGROUP_SCHED \
+            --enable CONFIG_CPUSETS \
+            --enable CONFIG_NAMESPACES \
+            --enable CONFIG_USER_NS \
+            --enable CONFIG_PID_NS \
+            --enable CONFIG_NET_NS \
+            --enable CONFIG_SECCOMP \
+            --enable CONFIG_KEXEC \
+            --enable CONFIG_KEXEC_FILE \
+            --enable CONFIG_KEXEC_JUMP \
+            --enable CONFIG_HARDENED_USERCOPY \
+            --enable CONFIG_STRICT_KERNEL_RWX \
+            --enable CONFIG_MODULES \
+            --enable CONFIG_KALLSYMS \
+            --enable CONFIG_IKCONFIG \
+            --enable CONFIG_UNWINDER_FRAME_POINTER
+
+          # Save the updated defconfig
+          make O=$OUT_DIR ARCH=$ARCH savedefconfig
+          cp $OUT_DIR/defconfig $KERNEL_DIR/arch/arm64/configs/$DEFCONFIG
+
+      # Step 9: Build the Kernel and DTB (Device Tree Blob)
+      - name: Build Kernel and DTB
+        run: |
+          export PATH=$TOOLCHAIN_DIR/bin:$PATH
+          make -j$(nproc) O=$OUT_DIR ARCH=$ARCH CROSS_COMPILE=aarch64-linux-android- CC=clang
+          make -j$(nproc) O=$OUT_DIR ARCH=$ARCH dtbs
+
+      # Step 10: Generate Image.gz-dtb
+      - name: Generate Image.gz-dtb
+        run: |
+          cd $OUT_DIR/arch/arm64/boot
+          gzip -c Image > Image.gz
+          
+          # Combine Image.gz and DTB to create Image.gz-dtb
+          cat Image.gz dts/qcom/dipper.dtb > Image.gz-dtb
+
+          # Copy the final image artifact
+          cp Image.gz-dtb ../../../../Image.gz-dtb
+
+      # Step 11: Upload the Image.gz-dtb Artifact
+      - name: Upload Image.gz-dtb Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-gz-dtb
+          path: Image.gz-dtb
+
+      # Step 12: Commit and Push Changes to Kernel 4.14 Repository
+      - name: Commit and Push Changes to Kernel 4.14 Repository
+        run: |
+          cd $KERNEL_DIR
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Commit the changes
+          git add .
+          git commit -m "$COMMIT_MSG" || echo "No changes to commit"
+          
+          # Push the changes to the 4.14 repo
+          git push origin HEAD:rebase
