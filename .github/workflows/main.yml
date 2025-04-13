@@ -57,7 +57,7 @@ jobs:
         cat $KERNEL_DIR/$OUT_DIR/arch/arm64/boot/Image.gz $KERNEL_DIR/$OUT_DIR/arch/arm64/boot/dts/qcom/dipper.dtb > $KERNEL_DIR/$OUT_DIR/Image.gz-dtb
 
     - name: Upload Kernel Image.gz-dtb
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: kernel-image-gz-dtb
         path: ${{ env.KERNEL_DIR }}/${{ env.OUT_DIR }}/Image.gz-dtb
