@@ -41,7 +41,7 @@ jobs:
 
     - name: Clone LineageOS Clang Toolchain
       run: |
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r450784d /toolchain/clang-r450784d
+        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b /toolchain/clang-r450784d
 
     - name: Install build dependencies
       run: sudo apt-get install -y bc bison build-essential cpio flex libssl-dev libncurses5-dev libelf-dev python3
